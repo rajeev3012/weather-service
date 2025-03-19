@@ -1,87 +1,111 @@
+# Workflow for Continuous Integration and Continuous Deployment (CI/CD) for the Weather Service application
 name: Weather Service CI/CD
 
+# ----- Trigger Events -----
+# This workflow will run when changes are pushed or when a pull request is created on the main branch.
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
 
+# ----- Global Environment Variables -----
+# These values are available in all jobs. IMAGE_TAG uses the unique commit SHA.
 env:
   IMAGE_NAME: weather-service
   IMAGE_TAG: ${{ github.sha }}
 
 jobs:
+  # ----- Job: Run Tests and Linting -----
   test:
     name: Run Tests
     runs-on: ubuntu-latest
-    
     steps:
-    - uses: actions/checkout@v3
-    
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-        
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install flake8 pytest
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-        
-    - name: Lint with flake8
-      run: |
-        # stop the build if there are Python syntax errors or undefined names
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        
-    - name: Test with pytest
-      run: |
-        pytest
+      # Step: Checkout the repository code so the workflow can access it.
+      - uses: actions/checkout@v3
 
+      # Step: Set up the Python environment with version 3.11.
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      # Step: Install necessary Python tools and libraries.
+      # This installs pip, flake8 for linting, and pytest for running tests.
+      # If there's a requirements.txt file, it also installs those dependencies.
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 pytest
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      # Step: Lint the code using flake8.
+      # This step checks for syntax errors and common issues in Python code. It stops if serious errors are found.
+      - name: Lint with flake8
+        run: |
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+
+      # Step: Run the tests using pytest.
+      # This ensures that all tests in the repository pass before proceeding.
+      - name: Test with pytest
+        run: |
+          pytest
+
+  # ----- Job: Build and Push Docker Image -----
   build-and-push:
     name: Build and Push Docker Image
-    needs: test
+    needs: test  # This job depends on the successful completion of the test job.
     runs-on: ubuntu-latest
-    # Only run on main branch pushes, not PRs
+    # This job only runs on push events, not on pull requests.
     if: github.event_name == 'push'
-    
     steps:
-    - uses: actions/checkout@v3
-    
-    - name: Build Docker image
-      run: docker build -t ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} .
-      
-    - name: Log in to GitHub Container Registry
-      uses: docker/login-action@v2
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-        
-    - name: Tag and push image to GitHub Container Registry
-      run: |
-        IMAGE_ID=ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
-        
-        # Change all uppercase to lowercase
-        IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
-        
-        # Tag with the commit SHA
-        docker tag ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} $IMAGE_ID:${{ env.IMAGE_TAG }}
-        docker tag ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} $IMAGE_ID:latest
-        
-        # Push the images
-        docker push $IMAGE_ID:${{ env.IMAGE_TAG }}
-        docker push $IMAGE_ID:latest
-        
-    - name: Update Kubernetes manifests
-      run: |
-        # Replace the image tag in the Kubernetes manifest
-        sed -i "s|image: .*|image: ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}|g" kubernetes/deployment.yaml
-        
-    - name: Commit and push updated manifests
-      run: |
-        git config --global user.name 'GitHub Actions'
-        git config --global user.email 'github-actions@github.com'
-        git add kubernetes/deployment.yaml
-        git commit -m "Update deployment image to ${{ env.IMAGE_TAG }}" || echo "No changes to commit"
-        git push
+      # Step: Checkout the repository code again for building the Docker image.
+      - uses: actions/checkout@v3
+
+      # Step: Build the Docker image using the Dockerfile in the repository.
+      # The image is tagged with IMAGE_NAME and a tag that is the current commit SHA.
+      - name: Build Docker image
+        run: docker build -t ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} .
+
+      # Step: Log in to GitHub Container Registry.
+      # This step uses the secret token to log in securely.
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Step: Tag and push the built image to GitHub Container Registry.
+      # The image is tagged with both the commit SHA and with the tag "latest".
+      - name: Tag and push image to GitHub Container Registry
+        run: |
+          # Create the full image identifier with repository owner and image name.
+          IMAGE_ID=ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
+          
+          # Convert any uppercase letters to lowercase (as image names are case-sensitive).
+          IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
+          
+          # Tag the image with the commit SHA and latest tag.
+          docker tag ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} $IMAGE_ID:${{ env.IMAGE_TAG }}
+          docker tag ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} $IMAGE_ID:latest
+          
+          # Push both tags (commit SHA tag and latest) to the container registry.
+          docker push $IMAGE_ID:${{ env.IMAGE_TAG }}
+          docker push $IMAGE_ID:latest
+
+      # Step: Update the Kubernetes deployment manifest.
+      # This step replaces the image reference in the deployment.yaml file with the new image tag.
+      - name: Update Kubernetes manifests
+        run: |
+          sed -i "s|image: .*|image: ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}|g" kubernetes/deployment.yaml
+
+      # Step: Commit and push the updated Kubernetes manifest.
+      # This step sets up Git, stages the changed file, commits the changes, and pushes it back to the repository.
+      - name: Commit and push updated manifests
+        run: |
+          git config --global user.name 'GitHub Actions'
+          git config --global user.email 'github-actions@github.com'
+          git add kubernetes/deployment.yaml
+          git commit -m "Update deployment image to ${{ env.IMAGE_TAG }}" || echo "No changes to commit"
+          git push

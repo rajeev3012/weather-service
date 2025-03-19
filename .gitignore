@@ -1,0 +1,21 @@
+# Ignore VS Code settings and extensions
+.vscode/
+
+# Ignore system-specific files
+.DS_Store
+Thumbs.db
+
+# Ignore temporary files and logs
+*.log
+*.tmp
+*.swp
+
+# Ignore Kubernetes secrets and sensitive data
+*secret*.yaml
+*.kubeconfig
+.env
+
+# Ignore backup or auto-generated files
+*.bak
+*.orig
+*.~*

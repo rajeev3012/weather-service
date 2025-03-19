@@ -1,0 +1,15 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: weather-service-monitor
+  namespace: weather
+  labels:
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: weather-service
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 15s

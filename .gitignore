@@ -10,6 +10,13 @@ Thumbs.db
 *.tmp
 *.swp
 
+# Terraform files
+**/.terraform/*
+**/.terraform.lock.hcl
+**/*.tfstate
+**/*.tfstate.backup
+**/terraform.tfvars
+
 # Ignore Kubernetes secrets and sensitive data
 *secret*.yaml
 *.kubeconfig

@@ -33,12 +33,6 @@ WEATHER_DATA = {
         "conditions": lambda: random.choice(["Cloudy", "Rainy", "Foggy", "Clear"]),
         "humidity": lambda: random.uniform(40, 95),
     },
-    "tokyo": {
-        "city": "Tokyo",
-        "temperature": lambda: random.uniform(5, 35),
-        "conditions": lambda: random.choice(["Clear", "Cloudy", "Rainy", "Stormy"]),
-        "humidity": lambda: random.uniform(30, 85),
-    }
 }
 
 @app.route('/health', methods=['GET'])
